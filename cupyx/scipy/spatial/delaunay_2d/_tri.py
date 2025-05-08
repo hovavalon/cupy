@@ -339,7 +339,7 @@ class GDel2D:
                 self.counters, self.n_points - 1, self.point_vec,
                 self.points_idx, self.pred_consts)
 
-    def _do_flipping(self, check_mode):
+    def _do_flipping(self, check_mode, tri_vote):
         tri_num = self.triangles.shape[0]
         if self._act_tri_mode == ActTriMode.ActTriMarkCompact:
             active_tri = is_tri_active(self.triangle_info)
@@ -369,7 +369,6 @@ class GDel2D:
             self._act_tri_mode = ActTriMode.ActTriMarkCompact
 
         # Vote for flips
-        tri_vote = cupy.full(tri_num, 0x7FFFFFFF, dtype=cupy.int32)
         self._dispatch_check_delaunay(check_mode, org_act_num, tri_vote)
 
         # Mark rejected flips
@@ -377,8 +376,6 @@ class GDel2D:
         mark_rejected_flips(
             self._act_tri, self.triangle_opp, tri_vote, self.triangle_info,
             flip_to_tri, org_act_num)
-
-        del tri_vote
 
         # Compact flips
         flip_to_tri = flip_to_tri[flip_to_tri >= 0]
@@ -464,9 +461,13 @@ class GDel2D:
 
         self._act_tri_mode = ActTriMode.ActTriMarkCompact
 
+        tri_vote = cupy.full(self.max_triangles, 0x7FFFFFFF, dtype=cupy.int32)
         flip_loop = 0
-        while self._do_flipping(check_mode):
+        while self._do_flipping(check_mode, tri_vote):
+            tri_vote[:self.triangles.shape[0]] = 0x7FFFFFFF
             flip_loop += 1
+
+        del tri_vote
 
         self._relocate_all()
 
